@@ -1,0 +1,65 @@
+# 🔐 Smart Password Generator (Python)
+
+### 👩‍💻 Team Aerrow  
+**Course:** 2025CSET100 — Computational Thinking and Programming
+
+---
+
+## 🧾 Project Overview
+The **Smart Password Generator** is a Python-based application that creates strong, secure, and personalized passwords.  
+It allows users to select different character types and includes part of their name for easier recall — without compromising security.
+
+---
+
+## 🎯 Objective
+To help users generate **secure yet memorable passwords** by combining personalization and randomness.
+
+---
+
+## 🧩 Features
+✅ Accepts user's name for personalization  
+✅ Lets users choose password length  
+✅ Optional inclusion of:
+- Uppercase letters
+- Lowercase letters
+- Numbers
+- Special symbols  
+✅ Randomized character mixing  
+✅ Personalized yet strong passwords  
+
+---
+
+## ⚙️ Tools & Technologies
+- **Language:** Python 3
+- **Libraries:** `random`, `string`
+
+---
+
+## 🧠 Algorithm / Logic
+1. **Input:** User’s name, password length, and preferences for character types.  
+2. **Character Pool:** Build a list from user’s selected character sets.  
+3. **Personalization:** Randomly uppercase/lowercase the first few letters of the user’s name.  
+4. **Password Generation:** Fill remaining length with random characters.  
+5. **Output:** Display the generated password.
+
+---
+
+## 💻 Source Code
+See [`smart_password_generator.py`](./smart_password_generator.py)
+
+---
+
+## 🧪 Sample Output
+
+=== Smart Password Generator ===
+
+Enter your name: Aditya
+Enter desired password length (e.g., 10): 12
+Include Uppercase Letters? (y/n): y
+Include Lowercase Letters? (y/n): y
+Include Numbers? (y/n): y
+Include Special Symbols? (y/n): y
+
+Generating password...
+
+Your generated password: AdIt@#yA73!
