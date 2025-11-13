@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Password Generator</title>
+    <style>
+        :root{
+            --teal:#20a39e;
+            --teal-600:#1b8f89;
+            --card:#ffffff;
+            --muted:#6b6b6b;
+            --danger:#e45757;
+            --accent:#20d2cc33;
+            --shadow: 0 6px 18px rgba(0,0,0,0.12);
+            --border-radius:18px;
+            --pad:28px;
+            font-family: Inter, "Segoe UI", Roboto, system-ui, -apple-system, "Helvetica Neue", Arial;
+        }
+
+        html,body{
+            height:100%;
+            margin:0;
+            background:var(--teal);
+            display:flex;
+            align-items:center;
+            justify-content:center;
+        }
+
+        .wrap{
+            width:760px;
+            max-width:95%;
+            background:var(--card);
+            border-radius:22px;
+            box-shadow:var(--shadow);
+            padding:36px;
+            position:relative;
+        }
+
+        .top-icon{
+            width:86px;height:86px;border-radius:18px;
+            background:linear-gradient(180deg,#ffffff,#f7ffff);
+            display:flex;align-items:center;justify-content:center;
+            margin: -70px auto 14px;
+            border:6px solid #20d2cc33;
+        }
+
+        .lock{ width:48px;height:40px;display:block; }
+
+        h1{
+            text-align:center;
+            margin:6px 0 6px;
+            font-size:22px;
+            letter-spacing:0.6px;
+        }
+
+        p.lead{
+            text-align:center;
+            color:var(--muted);
+            margin:0 0 18px;
+            font-size:14px;
+        }
+
+        .card-body{ padding:12px 6px 6px; }
+
+        .password-row{
+            display:flex;
+            gap:12px;
+            align-items:center;
+            margin:6px 0 12px;
+        }
+
+        .pwd-input{
+            flex:1;
+            display:flex;
+            align-items:center;
+            background:#fff;
+            border:1px solid #e6e6e6;
+            border-radius:26px;
+            padding:10px 14px;
+            box-sizing:border-box;
+            height:44px;
+            gap:8px;
+        }
+
+        .pwd-input input{
+            border:0;outline:0;font-size:15px;color:#222;width:100%;
+            background:transparent;
+        }
+
+        .icon-btn{
+            width:36px;height:36px;border-radius:50%;
+            display:inline-flex;align-items:center;justify-content:center;
+            background:transparent;border:0;cursor:pointer;color:var(--teal-600);
+        }
+
+        .copy-btn{
+            background:var(--accent);
+            border:0;color:#003;
+            padding:10px 14px;border-radius:12px;
+            box-shadow:0 4px 8px rgba(0,0,0,0.08);
+            cursor:pointer;font-weight:600;
+        }
+
+        .strength{
+            color:var(--danger);
+            font-weight:600;
+            margin-left:6px;
+            font-size:13px;
+        }
+
+        .controls{
+            margin-top:12px;
+            display:grid;
+            grid-template-columns: 180px 1fr;
+            gap:14px;
+            align-items:center;
+        }
+
+        .length-label{ color:var(--muted); font-size:14px; }
+
+        .slider{ display:flex;flex-direction:column;gap:8px; }
+
+        input[type="range"]{
+            -webkit-appearance:none;height:6px;border-radius:99px;background:#f0f0f0;outline:none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb{
+            -webkit-appearance:none;width:22px;height:22px;border-radius:50%;background:var(--teal);
+            box-shadow:0 2px 6px rgba(0,0,0,0.15);
+            border:4px solid #fff;margin-top:-8px;
+        }
+
+        .toggles{ display:flex;flex-direction:column;gap:12px;padding-left:8px; }
+
+        label.toggle{
+            display:flex;align-items:center;gap:12px;cursor:pointer;
+            user-select:none;color:#222;font-size:15px;
+        }
+
+        .custom-checkbox{
+            width:22px;height:22px;border-radius:6px;border:2px solid #e0e0e0;
+            display:inline-flex;align-items:center;justify-content:center;background:#fff;
+        }
+
+        input[type="checkbox"]{display:none;}
+        input[type="checkbox"]:checked + .custom-checkbox{
+            background:var(--teal);border-color:var(--teal);
+            box-shadow:0 3px 8px rgba(16,128,125,0.18);
+        }
+
+        .small{font-size:13px;color:var(--muted);}
+        footer{margin-top:18px;text-align:center;color:var(--muted);font-size:13px;}
+
+        @media (max-width:640px){
+            .controls{grid-template-columns:1fr;gap:10px;}
+            .top-icon{margin-top:-56px}
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap" role="main" aria-labelledby="title">
+        <div class="top-icon" aria-hidden="true">
+            <svg class="lock" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="3" y="9" width="18" height="11" rx="2" stroke="#20a39e" stroke-width="1.6" fill="#e9fffe"/>
+                <path d="M7 9V6a5 5 0 0 1 10 0v3" stroke="#20a39e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                <circle cx="12" cy="14" r="1.2" fill="#20a39e"/>
+            </svg>
+        </div>
+
+        <h1 id="title">PASSWORD GENERATOR</h1>
+        <p class="lead">Create strong and secure passwords to keep your account safe online.</p>
+
+        <div class="card-body">
+            <div class="password-row">
+                <div class="pwd-input" title="Generated password">
+                    <input id="password" readonly aria-label="Generated password" value="">
+                    <button id="regen" class="icon-btn" title="Regenerate" aria-label="Regenerate password">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M21 12a9 9 0 1 0-3 6.7" stroke="#1b8f89" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 3v6h-6" stroke="#1b8f89" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </button>
+                </div>
+                <button id="copy" class="copy-btn" title="Copy password">Copy</button>
+            </div>
+
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+                <span class="small">Password Strength:</span>
+                <span id="strength" class="strength">Weak</span>
+            </div>
+
+            <div class="controls">
+                <div>
+                    <div style="display:flex;align-items:center;justify-content:space-between;">
+                        <div class="length-label">Password Length: <strong id="lengthVal">12</strong></div>
+                    </div>
+                    <div class="slider">
+                        <input id="length" type="range" min="4" max="32" value="12" />
+                    </div>
+                </div>
+
+                <div class="toggles" role="group" aria-label="Password options">
+                    <label class="toggle"><input id="upper" type="checkbox" checked><span class="custom-checkbox"></span> Uppercase</label>
+                    <label class="toggle"><input id="lower" type="checkbox" checked><span class="custom-checkbox"></span> Lowercase</label>
+                    <label class="toggle"><input id="numbers" type="checkbox" checked><span class="custom-checkbox"></span> Numbers</label>
+                    <label class="toggle"><input id="symbols" type="checkbox" checked><span class="custom-checkbox"></span> Special Characters</label>
+                </div>
+            </div>
+
+            <footer>Tip: Use a mix of letters, numbers and symbols for a stronger password.</footer>
+        </div>
+    </div>
+
+    <script>
+        (function(){
+            const pwdEl = document.getElementById('password');
+            const lengthEl = document.getElementById('length');
+            const lengthValEl = document.getElementById('lengthVal');
+            const upperEl = document.getElementById('upper');
+            const lowerEl = document.getElementById('lower');
+            const numbersEl = document.getElementById('numbers');
+            const symbolsEl = document.getElementById('symbols');
+            const regenBtn = document.getElementById('regen');
+            const copyBtn = document.getElementById('copy');
+            const strengthEl = document.getElementById('strength');
+
+            const sets = {
+                lower: 'abcdefghijklmnopqrstuvwxyz',
+                upper: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+                numbers: '0123456789',
+                symbols: '!@#$%^&*()_+-=[]{}|;:,.<>?'
+            };
+
+            function buildCharset(){
+                let cs = '';
+                if (lowerEl.checked) cs += sets.lower;
+                if (upperEl.checked) cs += sets.upper;
+                if (numbersEl.checked) cs += sets.numbers;
+                if (symbolsEl.checked) cs += sets.symbols;
+                return cs;
+            }
+
+            function secureRandomInt(max){
+                const arr = new Uint32Array(1);
+                crypto.getRandomValues(arr);
+                return arr[0] % max;
+            }
+
+            function generate(){
+                const charset = buildCharset();
+                const len = parseInt(lengthEl.value,10);
+                if (!charset){
+                    pwdEl.value = '';
+                    updateStrength();
+                    return;
+                }
+                let out = '';
+                const forced = [];
+                if (lowerEl.checked) forced.push(sets.lower[secureRandomInt(sets.lower.length)]);
+                if (upperEl.checked) forced.push(sets.upper[secureRandomInt(sets.upper.length)]);
+                if (numbersEl.checked) forced.push(sets.numbers[secureRandomInt(sets.numbers.length)]);
+                if (symbolsEl.checked) forced.push(sets.symbols[secureRandomInt(sets.symbols.length)]);
+                for (let i=0;i<len;i++){
+                    out += charset[secureRandomInt(charset.length)];
+                }
+                for (let i=0;i<forced.length && i<out.length;i++){
+                    const idx = secureRandomInt(out.length);
+                    out = out.substring(0,idx) + forced[i] + out.substring(idx+1);
+                }
+                pwdEl.value = out;
+                updateStrength();
+            }
+
+            function scorePassword(pwd){
+                let score = 0;
+                if (!pwd) return 0;
+                const lengthScore = Math.min(20, pwd.length) * 2;
+                score += lengthScore;
+                if (/[a-z]/.test(pwd)) score += 15;
+                if (/[A-Z]/.test(pwd)) score += 15;
+                if (/[0-9]/.test(pwd)) score += 15;
+                if (/[^A-Za-z0-9]/.test(pwd)) score += 15;
+                const uniqueRatio = new Set(pwd).size / pwd.length;
+                score = Math.round(score * uniqueRatio);
+                return Math.min(100,score);
+            }
+
+            function updateStrength(){
+                const pwd = pwdEl.value || '';
+                const score = scorePassword(pwd);
+                let label = 'Weak', color = 'var(--danger)';
+                if (score > 75){ label = 'Strong'; color = '#1aa58a'; }
+                else if (score > 45){ label = 'Moderate'; color = '#f0a500'; }
+                strengthEl.textContent = pwd ? label : 'Weak';
+                strengthEl.style.color = color;
+            }
+
+            lengthEl.addEventListener('input', ()=> {
+                lengthValEl.textContent = lengthEl.value;
+                generate();
+            });
+            [upperEl,lowerEl,numbersEl,symbolsEl].forEach(el=>{
+                el.addEventListener('change', generate);
+            });
+            regenBtn.addEventListener('click', generate);
+
+            copyBtn.addEventListener('click', async ()=>{
+                const txt = pwdEl.value;
+                if (!txt) return;
+                try {
+                    await navigator.clipboard.writeText(txt);
+                    const old = copyBtn.textContent;
+                    copyBtn.textContent = 'Copied!';
+                    setTimeout(()=> copyBtn.textContent = old,1500);
+                } catch(e){
+                    pwdEl.select();
+                    document.execCommand('copy');
+                }
+            });
+
+            generate();
+            window.addEventListener('keydown', (e)=>{
+                if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'g'){
+                    e.preventDefault();
+                    generate();
+                }
+            });
+        })();
+    </script>
+</body>
+</html>
+"""
+
+@app.route("/")
+def home():
+    return render_template_string(html_content)
+
+if __name__ == "__main__":
+    app.run(debug=True)
