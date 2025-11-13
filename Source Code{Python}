@@ -1,0 +1,94 @@
+"""
+Smart Password Generator
+------------------------
+Author: Team Aerrow
+Course: 2025CSET100 - Computational Thinking and Programming
+
+Description:
+A Python-based password generator that creates strong, secure, and personalized passwords.
+Users can specify preferences for uppercase, lowercase, numbers, and special symbols.
+It also personalizes passwords using the user's name while maintaining randomness.
+"""
+
+import random
+import string
+
+def generate_password(name, length=10, use_upper=True, use_lower=True, use_numbers=True, use_symbols=True):
+    """
+    Generate a personalized, secure password.
+    
+    Parameters:
+        name (str): User's name for personalization.
+        length (int): Desired password length.
+        use_upper (bool): Include uppercase letters.
+        use_lower (bool): Include lowercase letters.
+        use_numbers (bool): Include digits.
+        use_symbols (bool): Include special symbols.
+    
+    Returns:
+        str: The generated password.
+    """
+
+    # Character sets
+    upper = string.ascii_uppercase
+    lower = string.ascii_lowercase
+    numbers = string.digits
+    symbols = "!@#$%^&*()_+{}[]<>?/|"
+
+    # Build character pool
+    chars = ""
+    if use_upper:
+        chars += upper
+    if use_lower:
+        chars += lower
+    if use_numbers:
+        chars += numbers
+    if use_symbols:
+        chars += symbols
+
+    if not chars:
+        return "Error: No character types selected. Please enable at least one option."
+
+    # Mix name into password
+    base = ""
+    if name:
+        base = ''.join(
+            ch.upper() if random.choice([True, False]) else ch.lower()
+            for ch in name[:4]
+        )
+
+    remaining_length = max(length - len(base), 0)
+    random_part = ''.join(random.choice(chars) for _ in range(remaining_length))
+
+    password = base + random_part
+    return password
+
+
+if __name__ == "__main__":
+    print("=== Smart Password Generator ===\n")
+
+    name = input("Enter your name: ").strip()
+    try:
+        length = int(input("Enter desired password length (e.g., 10): "))
+    except ValueError:
+        print("Invalid input! Please enter a numeric value for length.")
+        exit()
+
+    # Ask preferences
+    use_upper = input("Include Uppercase Letters? (y/n): ").lower() == "y"
+    use_lower = input("Include Lowercase Letters? (y/n): ").lower() == "y"
+    use_numbers = input("Include Numbers? (y/n): ").lower() == "y"
+    use_symbols = input("Include Special Symbols? (y/n): ").lower() == "y"
+
+    print("\nGenerating password...\n")
+
+    password = generate_password(
+        name=name,
+        length=length,
+        use_upper=use_upper,
+        use_lower=use_lower,
+        use_numbers=use_numbers,
+        use_symbols=use_symbols
+    )
+
+    print(f"Your generated password: {password}")
