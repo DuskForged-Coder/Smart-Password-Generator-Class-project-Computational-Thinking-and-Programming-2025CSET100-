@@ -1,88 +1,26 @@
- ┌────────────────────────────────┐
- │         START APPLICATION      │
- └───────────────┬────────────────┘
-                 │
-                 ▼
-     ┌───────────────────────────┐
-     │ Initialize CTk Window     │
-     │ • Dark theme              │
-     │ • Set fonts               │
-     │ • Window size             │
-     └──────────────┬────────────┘
-                    │
-                    ▼
-       ┌─────────────────────────┐
-       │ Build Main UI           │
-       │ • Title                 │
-       │ • Length slider         │
-       │ • Checkboxes (options)  │
-       │ • Output box            │
-       │ • Buttons               │
-       │ • History button        │
-       └─────────────┬───────────┘
-                     │
-                     ▼
-        ┌──────────────────────────┐
-        │ User Clicks "Generate"   │
-        └──────────────┬───────────┘
-                       │
-                       ▼
-      ┌─────────────────────────────────┐
-      │ generate_password()             │
-      │ • Build character pool          │
-      │ • Apply options (upper, lower)  │
-      │ • Remove ambiguous if selected  │
-      │ • Randomly choose characters    │
-      │ • Return final password         │
-      └─────────────────┬──────────────┘
-                        │
-                        ▼
-         ┌──────────────────────────┐
-         │ Display Password in UI   │
-         └─────────────┬────────────┘
-                       │
-                       ├─────────────► User copies password
-                       │               (clipboard function)
-                       │
-                       ▼
-         ┌──────────────────────────┐
-         │ User Clicks "Save"       │
-         └──────────────┬───────────┘
-                        │
-                        ▼
-       ┌─────────────────────────────────┐
-       │ Save Popup Window               │
-       │ User enters label               │
-       │ save_password() writes to CSV   │
-       └───────────────────┬────────────┘
-                           │
-                           ▼
-         ┌─────────────────────────────┐
-         │ CSV Updated (timestamp +    │
-         │ label + password)           │
-         └─────────────────┬──────────┘
-                           │
-                           ▼
-            ┌──────────────────────────┐
-            │ User Clicks "View History"  
-            └──────────────┬───────────┘
-                           │
-                           ▼
-        ┌───────────────────────────────────┐
-        │ Build History Window (CTkToplevel)│
-        │ Load CSV                          │
-        │ Show in ttk.Treeview table        │
-        │ "Export CSV" button               │
-        └────────────────────┬──────────────┘
-                             │
-                             ▼
-            ┌──────────────────────────────┐
-            │ User chooses export location │
-            │ via filedialog               │
-            │ CSV copied using shutil      │
-            └──────────────────────────────┘
-                             │
-                             ▼
-                  ┌───────────────────┐
-                  │       END         │
-                  └───────────────────┘
+from PIL import Image, ImageDraw, ImageFont
+
+text = """Hyperkey Generator – Architecture Flowchart
+
+START → Init Window → Build UI → Generate Password →
+Show Output → Save to CSV → View History → Export → END
+"""
+
+# Create PNG canvas
+img = Image.new("RGB", (1200, 800), (0, 0, 0))
+draw = ImageDraw.Draw(img)
+
+# Try loading a TTF font, fallback if missing
+try:
+    font = ImageFont.truetype("DejaVuSans.ttf", 32)
+except:
+    font = ImageFont.load_default()
+
+# Draw text
+draw.multiline_text((50, 50), text, fill=(255, 255, 255), font=font, spacing=20)
+
+# Save PNG
+path = "/mnt/data/Hyperkey_Flowchart.png"
+img.save(path)
+
+path
