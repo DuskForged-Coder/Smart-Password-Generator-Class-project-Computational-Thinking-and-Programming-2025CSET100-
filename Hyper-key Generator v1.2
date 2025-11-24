@@ -1,0 +1,814 @@
+import customtkinter as ctk
+import tkinter as tk
+from PIL import Image, ImageTk
+from tkinter import ttk, messagebox, filedialog
+import random
+import json
+import os
+import csv
+from datetime import datetime
+import shutil
+
+# NEW DEPENDENCY: python-chess
+# install with: pip install python-chess
+import chess
+
+SPLASH_DURATION = 5000  # 5 seconds
+RPS_HISTORY_FILE = "rps_history.json"
+PASSWORDS_FILE = "passwords.csv"
+
+
+# ==========================
+# Password Generation Logic
+# ==========================
+def generate_password(length, use_upper, use_lower, use_digits, use_symbols, avoid_ambiguous):
+    upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    lower = "abcdefghijklmnopqrstuvwxyz"
+    digits = "0123456789"
+    symbols = "!@#$%^&*()-_=+[]{};:,.<>?/"
+
+    # Ambiguous characters to remove if selected
+    ambiguous = "Il1O0"
+
+    pool = ""
+    if use_upper:
+        pool += upper
+    if use_lower:
+        pool += lower
+    if use_digits:
+        pool += digits
+    if use_symbols:
+        pool += symbols
+
+    if avoid_ambiguous:
+        pool = ''.join(ch for ch in pool if ch not in ambiguous)
+
+    if not pool:
+        return ""
+
+    return ''.join(random.choice(pool) for _ in range(length))
+
+
+# ==========================
+# Save Password
+# ==========================
+def save_password(label, password):
+    file_path = PASSWORDS_FILE
+    new_file = not os.path.exists(file_path)
+
+    with open(file_path, "a", newline="") as file:
+        writer = csv.writer(file)
+        if new_file:
+            writer.writerow(["Timestamp", "Label", "Password"])
+        writer.writerow([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), label, password])
+
+
+# ==========================
+# RPS History Helpers
+# ==========================
+def load_rps_history():
+    if not os.path.exists(RPS_HISTORY_FILE):
+        return {"user_moves": []}
+    try:
+        with open(RPS_HISTORY_FILE, "r") as f:
+            return json.load(f)
+    except Exception:
+        return {"user_moves": []}
+
+
+def save_rps_history(data):
+    with open(RPS_HISTORY_FILE, "w") as f:
+        json.dump(data, f)
+
+
+# ==========================
+# Matrix Splash Screen
+# ==========================
+class MatrixSplash(ctk.CTkToplevel):
+    def __init__(self, master, logo_path):
+        super().__init__(master)
+        self.overrideredirect(True)
+        self.geometry("800x450+350+150")
+        self.configure(fg_color="black")
+
+        self.canvas = tk.Canvas(self, bg="black", highlightthickness=0)
+        self.canvas.pack(fill="both", expand=True)
+
+        # Load logo (if available)
+        try:
+            self.logo = Image.open(logo_path)
+            self.logo = self.logo.resize((300, 300))
+            self.logo_img = ImageTk.PhotoImage(self.logo)
+            self.canvas.create_image(400, 220, image=self.logo_img)
+        except Exception:
+            # If logo fails, just show text
+            self.canvas.create_text(400, 220, text="HyperKey", fill="#9D4DFF", font=("Orbitron", 48))
+
+        # Matrix rain columns
+        self.columns = 90
+        self.drops = [0 for _ in range(self.columns)]
+        self.after(10, self.animate)
+
+    def animate(self):
+        self.canvas.delete("matrix")
+        for i in range(self.columns):
+            char = chr(random.randint(33, 126))
+            x = i * 10
+            y = self.drops[i] * 15
+            self.canvas.create_text(x, y, text=char, fill="#9D4DFF", font=("Consolas", 12), tags="matrix")
+
+            if y > 450 or random.random() > 0.95:
+                self.drops[i] = 0
+            self.drops[i] += 1
+        self.after(40, self.animate)
+
+
+# ==========================
+# Chess AI (simple minimax with material eval)
+# ==========================
+PIECE_VALUES = {
+    chess.PAWN: 100,
+    chess.KNIGHT: 320,
+    chess.BISHOP: 330,
+    chess.ROOK: 500,
+    chess.QUEEN: 900,
+    chess.KING: 20000
+}
+
+
+def evaluate_board(board: chess.Board) -> int:
+    """Material-only evaluation from White's perspective (positive = White advantage)."""
+    score = 0
+    for piece_type in PIECE_VALUES:
+        score += len(board.pieces(piece_type, chess.WHITE)) * PIECE_VALUES[piece_type]
+        score -= len(board.pieces(piece_type, chess.BLACK)) * PIECE_VALUES[piece_type]
+    # small mobility bonus
+    score += 0.1 * (board.legal_moves.count() if board.turn == chess.WHITE else -board.legal_moves.count())
+    return score
+
+
+def minimax(board: chess.Board, depth: int, alpha: float, beta: float, maximizing: bool) -> tuple:
+    """Returns (best_score, best_move)"""
+    if depth == 0 or board.is_game_over():
+        return evaluate_board(board), None
+
+    best_move = None
+    if maximizing:
+        max_eval = -float("inf")
+        for move in board.legal_moves:
+            board.push(move)
+            eval_score, _ = minimax(board, depth - 1, alpha, beta, False)
+            board.pop()
+            if eval_score > max_eval:
+                max_eval = eval_score
+                best_move = move
+            alpha = max(alpha, eval_score)
+            if beta <= alpha:
+                break
+        return max_eval, best_move
+    else:
+        min_eval = float("inf")
+        for move in board.legal_moves:
+            board.push(move)
+            eval_score, _ = minimax(board, depth - 1, alpha, beta, True)
+            board.pop()
+            if eval_score < min_eval:
+                min_eval = eval_score
+                best_move = move
+            beta = min(beta, eval_score)
+            if beta <= alpha:
+                break
+        return min_eval, best_move
+
+
+# ==========================
+# Main App UI
+# ==========================
+class HyperKeyApp(ctk.CTk):
+    def __init__(self):
+        super().__init__()
+
+        # --- Theme and Window ---
+        ctk.set_appearance_mode("dark")
+        ctk.set_default_color_theme("blue")
+
+        self.title("HyperKey Generator")
+        self.geometry("1100x700")
+        self.minsize(1000, 620)
+
+        # Sidebar
+        self.sidebar = ctk.CTkFrame(self, width=220, fg_color="#0B0B0B")
+        self.sidebar.pack(side="left", fill="y")
+
+        ctk.CTkLabel(self.sidebar, text="HyperKey", font=("Orbitron", 26, "bold"), text_color="#9D4DFF").pack(pady=24)
+
+        # --- Fonts ---
+        self.title_font = ("Orbitron", 24, "bold")
+        self.label_font = ("Roboto", 12)
+        self.button_font = ("Orbitron", 12, "bold")
+        self.output_font = ("Consolas", 16)
+
+        # Sidebar buttons
+        ctk.CTkButton(self.sidebar, text="Generator", fg_color="#9D4DFF", hover_color="#7A34CC", command=self.show_generator).pack(pady=10, padx=10, fill="x")
+        ctk.CTkButton(self.sidebar, text="History", fg_color="#222222", hover_color="#333333", command=self.show_history).pack(pady=10, padx=10, fill="x")
+        ctk.CTkButton(self.sidebar, text="About", fg_color="#222222", hover_color="#333333", command=self.show_about).pack(pady=10, padx=10, fill="x")
+        ctk.CTkButton(self.sidebar, text="RPS Game", fg_color="#222222", hover_color="#333333", command=self.show_rps).pack(pady=10, padx=10, fill="x")
+        ctk.CTkButton(self.sidebar, text="Chess", fg_color="#222222", hover_color="#333333", command=self.show_chessboard).pack(pady=10, padx=10, fill="x")
+
+        # Main Content Frame
+        self.main = ctk.CTkFrame(self, fg_color="#07070A")
+        self.main.pack(side="right", expand=True, fill="both")
+
+        # Initialize variables used by generator
+        self.length_var = ctk.IntVar(value=16)
+        self.upper_var = ctk.BooleanVar(value=True)
+        self.lower_var = ctk.BooleanVar(value=True)
+        self.digits_var = ctk.BooleanVar(value=True)
+        self.symbols_var = ctk.BooleanVar(value=True)
+        self.ambiguous_var = ctk.BooleanVar(value=False)
+
+        # Chess state placeholders
+        self.chess_board = None  # chess.Board()
+        self.chess_buttons = {}  # (row,col) -> widget
+        self.selected_square = None  # tuple (row, col)
+        self.square_to_coord = {}  # mapping from (row,col) to 'a8' etc
+        self.coord_to_square = {}  # mapping 'e2' -> (row,col)
+        self.play_as_white = True
+        self.ai_depth = 1
+
+        self.show_generator()
+
+    # ---------------- Generator Page ----------------
+    def show_generator(self):
+        for widget in self.main.winfo_children():
+            widget.destroy()
+
+        ctk.CTkLabel(self.main, text="Password Generator", font=self.title_font, text_color="#9D4DFF").pack(pady=20)
+
+        # --- Main Frame ---
+        frame = ctk.CTkFrame(self.main)
+        frame.pack(padx=40, pady=10, fill="x")
+        frame.grid_columnconfigure(1, weight=1)
+
+        ctk.CTkLabel(frame, text="Password Length:", font=self.label_font).grid(row=0, column=0, padx=10, pady=10, sticky="w")
+        self.length_label = ctk.CTkLabel(frame, textvariable=self.length_var, font=self.label_font)
+        self.length_label.grid(row=0, column=2, padx=10, pady=10)
+        self.length_slider = ctk.CTkSlider(frame, from_=6, to=64, variable=self.length_var, number_of_steps=58, command=lambda val: self.length_var.set(int(val)))
+        self.length_slider.grid(row=0, column=1, padx=10, pady=10, sticky="ew")
+
+        # --- Options ---
+        options = [
+            ("Include Uppercase (A-Z)", self.upper_var),
+            ("Include Lowercase (a-z)", self.lower_var),
+            ("Include Digits (0-9)", self.digits_var),
+            ("Include Symbols (!@#...)", self.symbols_var),
+            ("Avoid Ambiguous Chars (I,l,1,O,0)", self.ambiguous_var)
+        ]
+
+        for i, (text, var) in enumerate(options, start=1):
+            ctk.CTkCheckBox(frame, text=text, variable=var, font=self.label_font, text_color="#B883FF").grid(row=i, column=0, columnspan=3, padx=10, pady=5, sticky="w")
+
+        # --- Output Box ---
+        self.output = ctk.CTkEntry(self.main, font=self.output_font, justify="center", text_color="#9D4DFF")
+        self.output.pack(padx=40, pady=20, ipady=10, fill="x")
+
+        # --- Buttons ---
+        btn_frame = ctk.CTkFrame(self.main, fg_color="transparent")
+        btn_frame.pack(padx=40, pady=10)
+
+        self.gen_btn = ctk.CTkButton(btn_frame, text="Generate", font=self.button_font, command=self.generate, fg_color="#9D4DFF", text_color="#000000", hover_color="#7A34CC")
+        self.gen_btn.grid(row=0, column=0, padx=10, pady=10)
+
+        self.copy_btn = ctk.CTkButton(btn_frame, text="Copy", font=self.button_font, command=self.copy_password, fg_color="#B883FF", text_color="#000000", hover_color="#9A66CC")
+        self.copy_btn.grid(row=0, column=1, padx=10, pady=10)
+
+        self.save_btn = ctk.CTkButton(btn_frame, text="Save", font=self.button_font, command=self.save_password_popup, fg_color="#39FF14", text_color="#000000", hover_color="#2DBF0F")
+        self.save_btn.grid(row=0, column=2, padx=10, pady=10)
+
+        # --- History Button ---
+        history_btn = ctk.CTkButton(self.main, text="View History", font=self.button_font, command=self.show_history, fg_color="#FFAA00", text_color="#000000", hover_color="#BF8000")
+        history_btn.pack(padx=40, pady=10)
+
+    def generate(self):
+        password = generate_password(
+            self.length_var.get(),
+            self.upper_var.get(),
+            self.lower_var.get(),
+            self.digits_var.get(),
+            self.symbols_var.get(),
+            self.ambiguous_var.get()
+        )
+        self.output.delete(0, tk.END)
+        self.output.insert(0, password)
+
+    def copy_password(self):
+        pwd = self.output.get()
+        if pwd:
+            self.clipboard_clear()
+            self.clipboard_append(pwd)
+            self.copy_btn.configure(text="Copied!")
+            self.after(2000, lambda: self.copy_btn.configure(text="Copy"))
+
+    def save_password_popup(self):
+        pwd = self.output.get()
+        if not pwd:
+            messagebox.showerror("Error", "Generate a password first!")
+            return
+
+        popup = ctk.CTkToplevel(self)
+        popup.title("Save Password")
+        popup.geometry("350x200")
+        popup.transient(self)
+        popup.grab_set()
+        popup.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(popup, text="Label for password:", font=self.label_font).grid(row=0, column=0, padx=20, pady=10)
+        label_entry = ctk.CTkEntry(popup, width=200)
+        label_entry.grid(row=1, column=0, padx=20, pady=5)
+        label_entry.focus()
+
+        def save_now():
+            label = label_entry.get().strip()
+            if not label:
+                messagebox.showerror("Error", "Label cannot be empty!", parent=popup)
+                return
+            save_password(label, pwd)
+            popup.destroy()
+            messagebox.showinfo("Saved", "Password saved!")
+
+        save_button = ctk.CTkButton(popup, text="Save", command=save_now)
+        save_button.grid(row=2, column=0, padx=20, pady=20)
+        popup.bind("<Return>", lambda event: save_now())
+
+    # ---------------- About Page ----------------
+    def show_about(self):
+        # Create a new window instead of using main frame
+        about_window = ctk.CTkToplevel(self)
+        about_window.title("About - HyperKey Report")
+        about_window.geometry("900x600")
+        about_window.grab_set()
+
+        # Scrollable Frame
+        scroll_frame = ctk.CTkScrollableFrame(about_window, width=850, height=550)
+        scroll_frame.pack(padx=20, pady=20, fill="both", expand=True)
+
+        # Load report text from DOCX (optional)
+        try:
+            from docx import Document
+            doc = Document("/Users/adityanarayanrautaray/Downloads/Final_report_for_Hyper-key_Generator.docx")
+            report_text = "\n".join([para.text for para in doc.paragraphs])
+        except Exception as e:
+            report_text = f"Failed to load report.\nError: {e}"
+
+        # Report Label (scrollable)
+        ctk.CTkLabel(
+            scroll_frame,
+            text=report_text,
+            font=("Roboto", 14),
+            justify="left",
+            wraplength=820
+        ).pack(pady=10)
+
+    # ---------------- History Page ----------------
+    def show_history(self):
+        for widget in self.main.winfo_children():
+            widget.destroy()
+
+        ctk.CTkLabel(self.main, text="Saved Password History", font=("Orbitron", 22), text_color="#9D4DFF").pack(pady=20)
+
+        file_path = PASSWORDS_FILE
+
+        if not os.path.exists(file_path):
+            messagebox.showerror("Error", "No passwords saved yet!")
+            return
+
+        history_win = ctk.CTkToplevel(self)
+        history_win.title("Saved Passwords")
+        history_win.geometry("700x500")
+        history_win.transient(self)
+        history_win.grab_set()
+
+        history_win.grid_rowconfigure(0, weight=1)
+        history_win.grid_columnconfigure(0, weight=1)
+
+        tree_frame = ctk.CTkFrame(history_win)
+        tree_frame.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
+        tree_frame.grid_rowconfigure(0, weight=1)
+        tree_frame.grid_columnconfigure(0, weight=1)
+
+        style = ttk.Style()
+        style.theme_use("default")
+        style.configure("Treeview",
+                        background="#2a2d2e",
+                        foreground="white",
+                        rowheight=25,
+                        fieldbackground="#343638",
+                        bordercolor="#343638",
+                        borderwidth=0)
+        style.map('Treeview', background=[('selected', '#22559b')])
+        style.configure("Treeview.Heading",
+                        background="#565b5e",
+                        foreground="white",
+                        relief="flat")
+        style.map("Treeview.Heading",
+                  background=[('active', '#3484F0')])
+
+        tree = ttk.Treeview(tree_frame, columns=("Timestamp", "Label", "Password"), show="headings")
+        tree.heading("Timestamp", text="Timestamp")
+        tree.heading("Label", text="Label")
+        tree.heading("Password", text="Password")
+        tree.grid(row=0, column=0, sticky="nsew")
+
+        with open(file_path, newline="") as file:
+            reader = csv.reader(file)
+            header = next(reader, None)  # Skip header if present
+            for row in reader:
+                tree.insert("", "end", values=row)
+
+        def export_file():
+            save_path = filedialog.asksaveasfilename(defaultextension=".csv",
+                                                     initialfile="passwords_export.csv",
+                                                     filetypes=[("CSV Files", "*.csv")])
+            if save_path:
+                shutil.copy(file_path, save_path)
+                messagebox.showinfo("Exported", f"History exported to {save_path}!", parent=history_win)
+
+        export_button = ctk.CTkButton(history_win, text="Export CSV", command=export_file)
+        export_button.grid(row=1, column=0, padx=10, pady=10)
+
+    # ---------------- RPS PAGE ----------------
+    def show_rps(self):
+        for widget in self.main.winfo_children():
+            widget.destroy()
+
+        frame = ctk.CTkFrame(self.main)
+        frame.pack(fill="both", expand=True, padx=20, pady=20)
+
+        ctk.CTkLabel(frame, text="Rock - Paper - Scissors", font=("Orbitron", 24), text_color="#9D4DFF").pack(pady=10)
+
+        icons = {"Rock": "✊", "Paper": "✋", "Scissors": "✌️"}
+
+        def get_ai_choice():
+ # Load history to predict user's next move
+            history = load_rps_history()
+            user_moves = history.get("user_moves", [])
+
+ # If not enough history, make a random choice
+            if len(user_moves) < 5: # Increased history threshold for better prediction
+                return random.choice(["Rock", "Paper", "Scissors"])
+
+ # Predict user's next move based on their last few moves (e.g., last 3)
+            last_moves = user_moves[-3:] # Consider the last 3 moves
+            most_frequent_last_move = max(set(last_moves), key=last_moves.count)
+
+ # AI tries to counter the predicted user move
+            if most_frequent_last_move == "Rock":
+                return "Paper"
+            elif most_frequent_last_move == "Paper":
+                return "Scissors"
+            else: # most_frequent_last_move == "Scissors"
+                return "Rock" # AI plays Rock to beat Scissors
+
+        # UI Elements
+        result_label = ctk.CTkLabel(frame, text="Make Your Move", font=("Roboto", 20), text_color="#FFFFFF")
+        result_label.pack(pady=10)
+
+        choice_frame = ctk.CTkFrame(frame)
+        choice_frame.pack(pady=10)
+
+        user_label = ctk.CTkLabel(choice_frame, text="You: -", font=("Roboto", 18))
+        user_label.grid(row=0, column=0, padx=40)
+
+        ai_label = ctk.CTkLabel(choice_frame, text="Computer: -", font=("Roboto", 18))
+        ai_label.grid(row=0, column=1, padx=40)
+
+        def play(choice):
+            history = load_rps_history()
+            history.setdefault("user_moves", []).append(choice)
+            save_rps_history(history)
+
+            ai_choice = get_ai_choice()
+
+            user_label.configure(text=f"You: {icons[choice]}")
+            ai_label.configure(text=f"Computer: {icons[ai_choice]}")
+
+            if choice == ai_choice:
+                result_label.configure(text="Draw 😐", text_color="#CCCCCC")
+            elif (
+                (choice == "Rock" and ai_choice == "Scissors") or
+                (choice == "Paper" and ai_choice == "Rock") or
+                (choice == "Scissors" and ai_choice == "Paper")
+            ):
+                result_label.configure(text="You Win! 🎉", text_color="#39FF14")
+            else:
+                result_label.configure(text="You Lose ❌", text_color="#FF4444")
+
+        # Buttons
+        btn_frame = ctk.CTkFrame(frame, fg_color="transparent")
+        btn_frame.pack(pady=10)
+
+        ctk.CTkButton(btn_frame, text="✊ Rock", command=lambda: play("Rock"), width=130, fg_color="#9D4DFF").grid(row=0, column=0, padx=10)
+        ctk.CTkButton(btn_frame, text="✋ Paper", command=lambda: play("Paper"), width=130, fg_color="#9D4DFF").grid(row=0, column=1, padx=10)
+        ctk.CTkButton(btn_frame, text="✌️ Scissors", command=lambda: play("Scissors"), width=130, fg_color="#9D4DFF").grid(row=0, column=2, padx=10)
+
+        # Trash Talk Section
+        ctk.CTkLabel(frame, text="Trash Talk:", font=("Roboto", 14)).pack(pady=5)
+        trash_entry = ctk.CTkEntry(frame, width=300)
+        trash_entry.pack(pady=5)
+
+        chat_box = ctk.CTkTextbox(frame, width=500, height=130)
+        chat_box.pack(pady=10)
+
+        def ai_trash():
+            trash = [
+                "You're going down!",
+                "Is that all you've got?",
+                "Too easy!",
+                "My circuits are laughing!",
+                "Pathetic move!"
+            ]
+            chat_box.insert("end", f"AI: {random.choice(trash)}\n")
+
+        def send_msg():
+            msg = trash_entry.get().strip()
+            if msg:
+                chat_box.insert("end", f"You: {msg}\n")
+                trash_entry.delete(0, tk.END)
+                self.after(500, ai_trash)
+
+        ctk.CTkButton(frame, text="SEND", fg_color="#FFAA00", text_color="#000", command=send_msg).pack(pady=5)
+
+    # ---------------- Chess Page ----------------
+    def show_chessboard(self):
+        for widget in self.main.winfo_children():
+            widget.destroy()
+
+        # Top controls
+        top_frame = ctk.CTkFrame(self.main, fg_color="transparent")
+        top_frame.pack(fill="x", padx=20, pady=(10, 0))
+
+        ctk.CTkLabel(top_frame, text="Neon Chess — Play vs Computer", font=self.title_font, text_color="#9D4DFF").pack(side="left")
+
+        controls = ctk.CTkFrame(top_frame, fg_color="transparent")
+        controls.pack(side="right")
+
+        # Difficulty slider (depth 1-3)
+        ctk.CTkLabel(controls, text="AI Depth:", font=self.label_font).grid(row=0, column=0, padx=6)
+        self.ai_depth_var = ctk.IntVar(value=self.ai_depth)
+        depth_slider = ctk.CTkSlider(controls, from_=1, to=3, number_of_steps=2, variable=self.ai_depth_var, width=120,
+                                     command=lambda v: self.ai_depth_var.set(int(v)))
+        depth_slider.grid(row=0, column=1, padx=6)
+
+        # Switch sides
+        side_btn = ctk.CTkButton(controls, text="Switch Sides", command=self._switch_sides, width=100)
+        side_btn.grid(row=0, column=2, padx=6)
+
+        new_btn = ctk.CTkButton(controls, text="New Game", command=self._new_chess_game, width=100)
+        new_btn.grid(row=0, column=3, padx=6)
+
+        undo_btn = ctk.CTkButton(controls, text="Undo", command=self._undo_move, width=80)
+        undo_btn.grid(row=0, column=4, padx=6)
+
+        # Board frame and info
+        board_frame = ctk.CTkFrame(self.main)
+        board_frame.pack(padx=20, pady=16, side="left")
+
+        right_panel = ctk.CTkFrame(self.main, fg_color="#0B0B0B")
+        right_panel.pack(padx=20, pady=16, side="right", fill="y")
+
+        # Info / moves log
+        ctk.CTkLabel(right_panel, text="Moves", font=self.label_font).pack(pady=(0, 6))
+        self.moves_box = ctk.CTkTextbox(right_panel, width=36, height=28)
+        self.moves_box.pack(padx=6, pady=6)
+
+        # Initialize chessboard state
+        self._init_chess_mappings()
+        self._new_chess_game()
+
+        # Create buttons grid
+        self.chess_buttons = {}
+        for r in range(8):
+            for c in range(8):
+                btn = ctk.CTkButton(board_frame, text="", width=72, height=72, fg_color="transparent",
+                                    corner_radius=8, command=lambda rr=r, cc=c: self._on_square_click(rr, cc))
+                btn.grid(row=r, column=c, padx=3, pady=3)
+                self.chess_buttons[(r, c)] = btn
+
+        self._draw_board()
+
+    # ---------------- Chess helpers ----------------
+    def _init_chess_mappings(self):
+        # Board view: row 0 is top (rank 8), col 0 is left (file a)
+        self.square_to_coord = {}
+        self.coord_to_square = {}
+        files = "abcdefgh"
+        ranks = "87654321"
+        for r in range(8):
+            for c in range(8):
+                coord = f"{files[c]}{ranks[r]}"
+                self.square_to_coord[(r, c)] = coord
+                self.coord_to_square[coord] = (r, c)
+
+    def _new_chess_game(self):
+        self.chess_board = chess.Board()
+        self.selected_square = None
+        self.play_as_white = True  # default: user plays White
+        self.moves_box.delete("0.0", tk.END)
+        self._draw_board()
+
+    def _switch_sides(self):
+        self.play_as_white = not self.play_as_white
+        # if playing as black, let AI (white) move first
+        if not self.play_as_white:
+            self.after(200, self._maybe_ai_move)
+        self._draw_board()
+
+    def _undo_move(self):
+        if self.chess_board.move_stack:
+            self.chess_board.pop()
+            # If AI also moved, pop one more to return to user's turn
+            if self.chess_board.turn != (self.play_as_white):
+                if self.chess_board.move_stack:
+                    self.chess_board.pop()
+            self._update_moves_box()
+            self._draw_board()
+
+    def _on_square_click(self, row, col):
+        coord = self.square_to_coord[(row, col)]
+        sq_index = chess.parse_square(coord)
+        piece = self.chess_board.piece_at(sq_index)
+
+        # If no selection yet:
+        if not self.selected_square:
+            # select only if piece of player's color or empty (to allow deselect)
+            if piece is None:
+                return
+            if (piece.color == chess.WHITE and self.play_as_white) or (piece.color == chess.BLACK and not self.play_as_white):
+                self.selected_square = (row, col)
+                self._draw_board(highlight=(row, col))
+            else:
+                return
+        else:
+            # attempt move from selected_square -> clicked square
+            from_coord = self.square_to_coord[self.selected_square]
+            to_coord = coord
+            move_uci = from_coord + to_coord
+            move = None
+            try:
+                move = chess.Move.from_uci(move_uci)
+            except Exception:
+                # maybe promotion required (handle basics: promote to queen if pawn reaches last rank)
+                pass
+
+            legal = False
+            if move and move in self.chess_board.legal_moves:
+                legal = True
+            else:
+                # try promotions
+                for promo in ['q','r','b','n']:
+                    try:
+                        m = chess.Move.from_uci(move_uci + promo)
+                        if m in self.chess_board.legal_moves:
+                            move = m
+                            legal = True
+                            break
+                    except Exception:
+                        continue
+
+            if legal and move:
+                self.chess_board.push(move)
+                self._update_moves_box()
+                self.selected_square = None
+                self._draw_board()
+                # after user move, AI move if it's AI's turn
+                self.after(200, self._maybe_ai_move)
+            else:
+                # if clicked own piece, change selection
+                if piece is not None and ((piece.color == chess.WHITE and self.play_as_white) or (piece.color == chess.BLACK and not self.play_as_white)):
+                    self.selected_square = (row, col)
+                    self._draw_board(highlight=(row, col))
+                else:
+                    # invalid move - deselect
+                    self.selected_square = None
+                    self._draw_board()
+
+    def _maybe_ai_move(self):
+        # If game over or it's user's turn, do nothing
+        if self.chess_board.is_game_over():
+            return
+        is_ai_turn = (self.chess_board.turn != self.play_as_white)
+        if is_ai_turn:
+            # AI to move
+            self._ai_move()
+
+    def _ai_move(self):
+        depth = int(self.ai_depth_var.get()) if hasattr(self, "ai_depth_var") else self.ai_depth
+        # if few legal moves, pick random to save time
+        legal_count = self.chess_board.legal_moves.count()
+        if legal_count <= 6:
+            move = random.choice(list(self.chess_board.legal_moves))
+        else:
+            # Use minimax from AI perspective. maximizing = White
+            maximizing = True if self.chess_board.turn == chess.WHITE else False
+            score, move = minimax(self.chess_board, depth, -float("inf"), float("inf"), maximizing)
+            if move is None:
+                move = random.choice(list(self.chess_board.legal_moves))
+        # execute AI move
+        self.chess_board.push(move)
+        self._update_moves_box()
+        self._draw_board()
+
+    def _update_moves_box(self):
+        # show SAN moves
+        moves = list(self.chess_board.move_stack)
+        board = chess.Board()
+        san_lines = []
+        for i, m in enumerate(moves):
+            if i % 2 == 0:
+                san_lines.append(f"{(i//2)+1}. ")
+            san_lines[-1] += board.san(m) + (" " if i % 2 == 0 else "\n")
+            board.push(m)
+        self.moves_box.delete("0.0", tk.END)
+        self.moves_box.insert(tk.END, "".join(san_lines))
+        # detect end of game
+        if self.chess_board.is_checkmate():
+            winner = "Black" if self.chess_board.turn == chess.WHITE else "White"
+            messagebox.showinfo("Checkmate", f"Checkmate! {winner} wins.")
+        elif self.chess_board.is_stalemate():
+            messagebox.showinfo("Game Over", "Stalemate.")
+        elif self.chess_board.is_insufficient_material():
+            messagebox.showinfo("Game Over", "Draw by insufficient material.")
+        elif self.chess_board.can_claim_threefold_repetition():
+            messagebox.showinfo("Game Over", "Threefold repetition (claimable).")
+
+    def _draw_board(self, highlight=None):
+        # highlight: (row,col) for selected
+        # Use neon colors: dark background with glowing squares
+        light_color = "#1E1B4B"  # deep violet
+        dark_color = "#05020A"   # almost black
+        glow_color = "#9D4DFF"   # neon violet
+        alt_glow = "#39FF14"     # neon green for selection
+
+        # piece unicode mapping (white and black)
+        piece_unicode = {
+            chess.PAWN:   ("♙", "♟"),
+            chess.ROOK:   ("♖", "♜"),
+            chess.KNIGHT: ("♘", "♞"),
+            chess.BISHOP: ("♗", "♝"),
+            chess.QUEEN:  ("♕", "♛"),
+            chess.KING:   ("♔", "♚"),
+        }
+
+        for r in range(8):
+            for c in range(8):
+                btn = self.chess_buttons.get((r, c))
+                if not btn:
+                    continue
+                coord = self.square_to_coord[(r, c)]
+                sq_index = chess.parse_square(coord)
+                piece = self.chess_board.piece_at(sq_index)
+
+                # square base color (checker pattern)
+                if (r + c) % 2 == 0:
+                    base = light_color
+                else:
+                    base = dark_color
+
+                # if highlighted (selected)
+                if highlight and (r, c) == highlight:
+                    border_color = alt_glow
+                    text_color = alt_glow
+                else:
+                    border_color = glow_color
+                    text_color = "#EDEDED"
+
+                # assemble display text (unicode)
+                text = ""
+                if piece:
+                    uni = piece_unicode[piece.piece_type][0 if piece.color == chess.WHITE else 1]
+                    text = uni
+
+                # style: use fg_color as base and text color neon
+                btn.configure(text=text, fg_color=base, text_color=text_color)
+                # add a subtle border/glow by adjusting corner radius + highlight
+                # CTk doesn't support outer glow easily; we simulate by changing fg_color and text_color
+
+    # ---------------- end of class HyperKeyApp ----------------
+
+
+# ==========================
+# Run App with Splash Screen
+# ==========================
+if __name__ == "__main__":
+    LOGO_PATH = "/Users/adityanarayanrautaray/Downloads/hyperkey_logo.png"
+
+    app = HyperKeyApp()
+    splash = MatrixSplash(app, LOGO_PATH)
+    app.withdraw()
+
+    def start_app():
+        splash.destroy()
+        app.deiconify()
+
+    app.after(SPLASH_DURATION, start_app)
+    app.mainloop()
