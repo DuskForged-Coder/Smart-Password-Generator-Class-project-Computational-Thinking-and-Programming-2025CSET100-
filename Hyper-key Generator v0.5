@@ -1,0 +1,361 @@
+
+import customtkinter as ctk
+import tkinter as tk
+from PIL import Image, ImageTk
+import customtkinter as ctk
+from tkinter import ttk, messagebox, filedialog
+import random
+import csv
+import os
+from datetime import datetime
+import shutil
+
+SPLASH_DURATION = 5000  # 5 seconds
+
+# ==========================
+# Password Generation Logic
+# ==========================
+def generate_password(length, use_upper, use_lower, use_digits, use_symbols, avoid_ambiguous):
+    upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    lower = "abcdefghijklmnopqrstuvwxyz"
+    digits = "0123456789"
+    symbols = "!@#$%^&*()-_=+[]{};:,.&lt;&gt;?/"
+
+    # Ambiguous characters to remove if selected
+    ambiguous = "Il1O0"
+
+    pool = ""
+    if use_upper:
+        pool += upper
+    if use_lower:
+        pool += lower
+    if use_digits:
+        pool += digits
+    if use_symbols:
+        pool += symbols
+
+    if avoid_ambiguous:
+        pool = ''.join(ch for ch in pool if ch not in ambiguous)
+
+    if not pool:
+        return ""
+
+    return ''.join(random.choice(pool) for _ in range(length))
+
+
+# ==========================
+# Save Password
+# ==========================
+def save_password(label, password):
+    file_path = "passwords.csv"
+    new_file = not os.path.exists(file_path)
+
+    with open(file_path, "a", newline="") as file:
+        writer = csv.writer(file)
+        if new_file:
+            writer.writerow(["Timestamp", "Label", "Password"])
+        writer.writerow([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), label, password])
+
+
+# ==========================
+# Matrix Splash Screen
+# ==========================
+class MatrixSplash(ctk.CTkToplevel):
+    def __init__(self, master, logo_path):
+        super().__init__(master)
+        self.overrideredirect(True)
+        self.geometry("800x450+350+150")
+        self.configure(fg_color="black")
+
+        self.canvas = tk.Canvas(self, bg="black", highlightthickness=0)
+        self.canvas.pack(fill="both", expand=True)
+
+        # Load logo
+        self.logo = Image.open(logo_path)
+        self.logo = self.logo.resize((300, 300))
+        self.logo_img = ImageTk.PhotoImage(self.logo)
+        self.canvas.create_image(400, 220, image=self.logo_img)
+
+        # Matrix rain columns
+        self.columns = 90
+        self.drops = [0 for _ in range(self.columns)]
+        self.after(10, self.animate)
+
+    def animate(self):
+        self.canvas.delete("matrix")
+        for i in range(self.columns):
+            char = chr(random.randint(33, 126))
+            x = i * 10
+            y = self.drops[i] * 15
+            self.canvas.create_text(x, y, text=char, fill="#9D4DFF", font=("Consolas", 12), tags="matrix")
+
+            if y > 450 or random.random() > 0.95:
+                self.drops[i] = 0
+            self.drops[i] += 1
+        self.after(40, self.animate)
+
+
+# ==========================
+# Main App UI
+# ==========================
+class HyperKeyApp(ctk.CTk):
+    def __init__(self):
+        super().__init__()
+
+        # --- Theme and Window ---
+        ctk.set_appearance_mode("dark")
+        ctk.set_default_color_theme("blue") # This will be overridden by custom colors
+
+        self.title("HyperKey Generator v0.5")
+        self.geometry("1000x620")
+        self.minsize(1000, 620)
+
+        # Sidebar
+        self.sidebar = ctk.CTkFrame(self, width=200, fg_color="#121212")
+        self.sidebar.pack(side="left", fill="y")
+
+        ctk.CTkLabel(self.sidebar, text="HyperKey", font=("Orbitron", 26, "bold"), text_color="#9D4DFF").pack(pady=30)
+
+
+        # --- Fonts ---
+        self.title_font = ("Orbitron", 24, "bold")
+        self.label_font = ("Roboto", 12)
+        self.button_font = ("Orbitron", 12, "bold")
+        self.output_font = ("Consolas", 16)
+
+        # Sidebar buttons
+        ctk.CTkButton(self.sidebar, text="Generator", fg_color="#9D4DFF", hover_color="#7A34CC", command=self.show_generator).pack(pady=10)
+        ctk.CTkButton(self.sidebar, text="History", fg_color="#222222", hover_color="#333333", command=self.show_history).pack(pady=10)
+        ctk.CTkButton(self.sidebar, text="About", fg_color="#222222", hover_color="#333333", command=self.show_about).pack(pady=10)
+
+        # Main Content Frame
+        self.main = ctk.CTkFrame(self, fg_color="#0A0A0A")
+        self.main.pack(side="right", expand=True, fill="both")
+
+        self.show_generator()
+
+    # ---------------- Generator Page ----------------
+    def show_generator(self):
+        for widget in self.main.winfo_children():
+            widget.destroy()
+
+        ctk.CTkLabel(self.main, text="Password Generator", font=("Orbitron", 24), text_color="#9D4DFF").pack(pady=20)
+
+        # --- Main Frame ---
+        frame = ctk.CTkFrame(self.main)
+        frame.pack(padx=40, pady=10, fill="x")
+        frame.grid_columnconfigure(1, weight=1)
+
+        ctk.CTkLabel(frame, text="Password Length:", font=self.label_font).grid(row=0, column=0, padx=10, pady=10, sticky="w")
+        self.length_var = ctk.IntVar(value=16)
+        self.length_label = ctk.CTkLabel(frame, textvariable=self.length_var, font=self.label_font)
+        self.length_label.grid(row=0, column=2, padx=10, pady=10)
+        self.length_slider = ctk.CTkSlider(frame, from_=6, to=64, variable=self.length_var, number_of_steps=58, command=lambda val: self.length_var.set(int(val)))
+        self.length_slider.grid(row=0, column=1, padx=10, pady=10, sticky="ew")
+
+
+        # --- Options ---
+        self.upper_var = ctk.BooleanVar(value=True)
+        self.lower_var = ctk.BooleanVar(value=True)
+        self.digits_var = ctk.BooleanVar(value=True)
+        self.symbols_var = ctk.BooleanVar(value=True)
+        self.ambiguous_var = ctk.BooleanVar(value=False)
+
+        options = [
+            ("Include Uppercase (A-Z)", self.upper_var),
+            ("Include Lowercase (a-z)", self.lower_var),
+            ("Include Digits (0-9)", self.digits_var),
+            ("Include Symbols (!@#...)", self.symbols_var),
+            ("Avoid Ambiguous Chars (I,l,1,O,0)", self.ambiguous_var)
+        ]
+
+        for i, (text, var) in enumerate(options, start=1):
+            ctk.CTkCheckBox(frame, text=text, variable=var, font=self.label_font, text_color="#B883FF").grid(row=i, column=0, columnspan=3, padx=10, pady=5, sticky="w")
+
+        # --- Output Box ---
+        self.output = ctk.CTkEntry(self.main, font=self.output_font, justify="center", text_color="#9D4DFF")
+        self.output.pack(padx=40, pady=20, ipady=10, fill="x")
+
+        # --- Buttons ---
+        btn_frame = ctk.CTkFrame(self.main, fg_color="transparent")
+        btn_frame.pack(padx=40, pady=10)
+
+        self.gen_btn = ctk.CTkButton(btn_frame, text="Generate", font=self.button_font, command=self.generate, fg_color="#9D4DFF", text_color="#000000", hover_color="#7A34CC")
+        self.gen_btn.grid(row=0, column=0, padx=10, pady=10)
+
+        self.copy_btn = ctk.CTkButton(btn_frame, text="Copy", font=self.button_font, command=self.copy_password, fg_color="#B883FF", text_color="#000000", hover_color="#9A66CC")
+        self.copy_btn.grid(row=0, column=1, padx=10, pady=10)
+
+        self.save_btn = ctk.CTkButton(btn_frame, text="Save", font=self.button_font, command=self.save_password_popup, fg_color="#39FF14", text_color="#000000", hover_color="#2DBF0F")
+        self.save_btn.grid(row=0, column=2, padx=10, pady=10)
+
+        # --- History Button ---
+        history_btn = ctk.CTkButton(self.main, text="View History", font=self.button_font, command=self.show_history, fg_color="#FFAA00", text_color="#000000", hover_color="#BF8000")
+        history_btn.pack(padx=40, pady=10)
+
+
+    def generate(self):
+        password = generate_password(
+            self.length_var.get(),
+            self.upper_var.get(),
+            self.lower_var.get(),
+            self.digits_var.get(),
+            self.symbols_var.get(),
+            self.ambiguous_var.get()
+        )
+        self.output.delete(0, ctk.END)
+        self.output.insert(0, password)
+
+    def copy_password(self):
+        pwd = self.output.get()
+        if pwd:
+            self.clipboard_clear()
+            self.clipboard_append(pwd)
+            self.copy_btn.configure(text="Copied!")
+            self.after(2000, lambda: self.copy_btn.configure(text="Copy"))
+
+    def save_password_popup(self):
+        pwd = self.output.get()
+        if not pwd:
+            messagebox.showerror("Error", "Generate a password first!")
+            return
+
+        popup = ctk.CTkToplevel(self)
+        popup.title("Save Password")
+        popup.geometry("350x200")
+        popup.transient(self)
+        popup.grab_set()
+        popup.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(popup, text="Label for password:", font=self.label_font).grid(row=0, column=0, padx=20, pady=10)
+        label_entry = ctk.CTkEntry(popup, width=200)
+        label_entry.grid(row=1, column=0, padx=20, pady=5)
+        label_entry.focus()
+
+        def save_now():
+            label = label_entry.get().strip()
+            if not label:
+                messagebox.showerror("Error", "Label cannot be empty!", parent=popup)
+                return
+            save_password(label, pwd)
+            popup.destroy()
+            messagebox.showinfo("Saved", "Password saved!")
+
+        save_button = ctk.CTkButton(popup, text="Save", command=save_now)
+        save_button.grid(row=2, column=0, padx=20, pady=20)
+        popup.bind("<Return>", lambda event: save_now())
+    
+    # ---------------- About Page ----------------
+    # ---------------- About Page (opens new window with full report) ----------------
+    def show_about(self):
+        # Create a new window instead of using main frame
+        about_window = ctk.CTkToplevel(self)
+        about_window.title("About - HyperKey Report")
+        about_window.geometry("900x600")
+        about_window.grab_set()
+
+        # Scrollable Frame
+        scroll_frame = ctk.CTkScrollableFrame(about_window, width=850, height=550)
+        scroll_frame.pack(padx=20, pady=20, fill="both", expand=True)
+
+        # Load report text from DOCX
+        try:
+            from docx import Document
+            doc = Document("/Users/adityanarayanrautaray/Downloads/Final_report_for_Hyper-key_Generator.docx")
+            report_text = "\n".join([para.text for para in doc.paragraphs])
+        except Exception as e:
+            report_text = f"Failed to load report.\nError: {e}"
+
+        # Report Label (scrollable)
+        ctk.CTkLabel(
+            scroll_frame,
+            text=report_text,
+            font=("Roboto", 14),
+            justify="left",
+            wraplength=820
+        ).pack(pady=10)
+
+    # ---------------- History Page ----------------
+    def show_history(self):
+        for widget in self.main.winfo_children(): widget.destroy()
+
+        ctk.CTkLabel(self.main, text="Saved Password History", font=("Orbitron", 22), text_color="#9D4DFF").pack(pady=20)
+
+        file_path = "passwords.csv"
+
+
+        if not os.path.exists(file_path):
+            messagebox.showerror("Error", "No passwords saved yet!")
+            return
+
+        history = ctk.CTkToplevel(self)
+        history.title("Saved Passwords")
+        history.geometry("700x500")
+        history.transient(self)
+        history.grab_set()
+
+        history.grid_rowconfigure(0, weight=1)
+        history.grid_columnconfigure(0, weight=1)
+
+        tree_frame = ctk.CTkFrame(history)
+        tree_frame.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
+        tree_frame.grid_rowconfigure(0, weight=1)
+        tree_frame.grid_columnconfigure(0, weight=1)
+
+        style = ttk.Style()
+        style.theme_use("default")
+        style.configure("Treeview",
+                        background="#2a2d2e",
+                        foreground="white",
+                        rowheight=25,
+                        fieldbackground="#343638",
+                        bordercolor="#343638",
+                        borderwidth=0)
+        style.map('Treeview', background=[('selected', '#22559b')])
+        style.configure("Treeview.Heading",
+                        background="#565b5e",
+                        foreground="white",
+                        relief="flat")
+        style.map("Treeview.Heading",
+                  background=[('active', '#3484F0')])
+
+
+        tree = ttk.Treeview(tree_frame, columns=("Timestamp", "Label", "Password"), show="headings")
+        tree.heading("Timestamp", text="Timestamp")
+        tree.heading("Label", text="Label")
+        tree.heading("Password", text="Password")
+        tree.grid(row=0, column=0, sticky="nsew")
+
+        with open(file_path, newline="") as file:
+            reader = csv.reader(file)
+            header = next(reader) # Skip header
+            for row in reader:
+                tree.insert("", "end", values=row)
+
+        def export_file():
+            save_path = filedialog.asksaveasfilename(defaultextension=".csv",
+                                                     initialfile="passwords_export.csv",
+                                                     filetypes=[("CSV Files", "*.csv")])
+            if save_path:
+                shutil.copy(file_path, save_path)
+                messagebox.showinfo("Exported", f"History exported to {save_path}!", parent=history)
+
+        export_button = ctk.CTkButton(history, text="Export CSV", command=export_file)
+        export_button.grid(row=1, column=0, padx=10, pady=10)
+
+# ==========================
+# Run App with Splash Screen
+# ==========================
+if __name__ == "__main__":
+    LOGO_PATH = "/Users/adityanarayanrautaray/Downloads/hyperkey_logo.png"
+
+    app = HyperKeyApp()
+    splash = MatrixSplash(app, LOGO_PATH)
+    app.withdraw()
+
+    def start_app():
+        splash.destroy()
+        app.deiconify()
+
+    app.after(SPLASH_DURATION, start_app)
+    app.mainloop()
